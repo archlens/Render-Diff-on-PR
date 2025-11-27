@@ -136,7 +136,7 @@ runs:
       if: steps.run_archlens.outputs.HAS_CHANGES == 'true'
       with:
         message: |
-          Module view diffs:
+          ArchLens detected architectural changes in the following views:
           ${{ steps.run_archlens.outputs.MARKDOWN }}
 
     - uses: mshick/add-pr-comment@v2
