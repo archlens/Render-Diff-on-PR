@@ -136,12 +136,12 @@ runs:
       if: steps.run_archlens.outputs.HAS_CHANGES == 'true'
       with:
         message: |
-          ArchLens detected architectural changes in the following views:
+          **ArchLens** detected architectural changes in the following views:
           ${{ steps.run_archlens.outputs.MARKDOWN }}
 
     - uses: mshick/add-pr-comment@v2
       if: steps.run_archlens.outputs.HAS_CHANGES == 'false'
       with:
         message: |
-          No architecturally relevant changes to the existing views (ArchLens)
+          **ArchLens** - No architecturally relevant changes to the existing views
 
