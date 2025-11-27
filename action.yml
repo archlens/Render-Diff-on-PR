@@ -37,19 +37,33 @@ runs:
       id: run_archlens
       run: |
         ls -la
-        if [ "${{inputs.render-diff}}" == "true" ] 
+        if [ "${{inputs.render-diff}}" == "true" ]
         then
-          MT_DEBUG="true" archlens render-diff --config-path ${{ inputs.config-path }}
+          OUTPUT=$(MT_DEBUG="true" archlens render-diff --config-path ${{ inputs.config-path }})
+          echo "$OUTPUT"
+          # Extract the list of changed views
+          CHANGED_VIEWS=$(echo "$OUTPUT" | grep -oP 'ARCHLENS_CHANGED_VIEWS=\K.*' || echo "")
+          if [ -z "$CHANGED_VIEWS" ]; then
+            echo "HAS_CHANGES=false" >> $GITHUB_OUTPUT
+            echo "No architectural changes detected."
+            exit 0
+          else
+            echo "HAS_CHANGES=true" >> $GITHUB_OUTPUT
+            echo "CHANGED_VIEWS=$CHANGED_VIEWS" >> $GITHUB_OUTPUT
+          fi
         else
           MT_DEBUG="true" archlens render --config-path ${{ inputs.config-path }}
+          echo "HAS_CHANGES=true" >> $GITHUB_OUTPUT
+          # For non-diff mode, include all views
+          CHANGED_VIEWS=""
         fi
 
         # get the pull request ID from the ref
-        IN=${{github.ref}} 
+        IN=${{github.ref}}
         arrIN=(${IN//\// })
         PULL_REQUEST_ID=${arrIN[2]}
-        
-        # read the saveLocation from the json config (e.g. "./archlens.json/")
+
+        # read the saveLocation from the json config
         DIAGRAMS_FOLDER=$(jq -r '.saveLocation' ${{ inputs.config-path }})
 
         # save a stripped version as well
@@ -58,7 +72,7 @@ runs:
 
         # create a unique folder name (concat pull request ID)
         UNIQUE_NAME=$STRIPPED_FOLDER_NAME-$PULL_REQUEST_ID
-        
+
         # rename the savelocation to our unique name
         echo mv $STRIPPED_FOLDER_NAME $UNIQUE_NAME
         mv $STRIPPED_FOLDER_NAME $UNIQUE_NAME
@@ -81,31 +95,53 @@ runs:
         git push origin ${{ inputs.BRANCH_NAME }}
 
         cd $UNIQUE_NAME
-        files=()
-
-        for file in *; do
-          files+=("$file")
-        done
-
         resultStr=""
 
+        # Convert changed views to array for filtering
+        IFS=',' read -ra CHANGED_VIEWS_ARRAY <<< "$CHANGED_VIEWS"
+
         # for each file, we append the markdown for showing the png to a string
-        for file in "${files[@]}"; do
-          if (( ${{ github.run_number }} == "${file%%-*}" ))
-          then
-            resultStr+="![diff](https://raw.githubusercontent.com/${{github.repository}}/${{ inputs.BRANCH_NAME }}/$UNIQUE_NAME/$file)" 
+        # only include files for views that have changes
+        for file in *; do
+          if (( ${{ github.run_number }} == "${file%%-*}" )); then
+            # For render-diff mode, filter by changed views
+            if [ "${{inputs.render-diff}}" == "true" ] && [ -n "$CHANGED_VIEWS" ]; then
+              # Extract view name from filename: {run_number}-{project_name}-diff-{view_name}.png
+              # Remove run number prefix and .png suffix, then extract view name after "-diff-"
+              filename_without_prefix="${file#*-}"  # Remove run number
+              view_name="${filename_without_prefix##*-diff-}"  # Get everything after "-diff-"
+              view_name="${view_name%.png}"  # Remove .png extension
+
+              # Check if this view is in the changed views list
+              for changed_view in "${CHANGED_VIEWS_ARRAY[@]}"; do
+                if [ "$view_name" == "$changed_view" ]; then
+                  resultStr+="![diff](https://raw.githubusercontent.com/${{github.repository}}/${{ inputs.BRANCH_NAME }}/$UNIQUE_NAME/$file)"$'\n'
+                  break
+                fi
+              done
+            else
+              # For non-diff mode, include all files
+              resultStr+="![diff](https://raw.githubusercontent.com/${{github.repository}}/${{ inputs.BRANCH_NAME }}/$UNIQUE_NAME/$file)"$'\n'
+            fi
           fi
         done
 
         # output the full markdown
-        echo "MARKDOWN=$resultStr" >> $GITHUB_OUTPUT
+        echo "MARKDOWN<<EOF" >> $GITHUB_OUTPUT
+        echo "$resultStr" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
       shell: bash
 
     - uses: mshick/add-pr-comment@v2
+      if: steps.run_archlens.outputs.HAS_CHANGES == 'true'
       with:
         message: |
           Module view diffs:
           ${{ steps.run_archlens.outputs.MARKDOWN }}
-          
-          
-          
+
+    - uses: mshick/add-pr-comment@v2
+      if: steps.run_archlens.outputs.HAS_CHANGES == 'false'
+      with:
+        message: |
+          No architecturally relevant changes to the existing views (ArchLens)
+
