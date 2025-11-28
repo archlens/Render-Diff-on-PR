@@ -77,7 +77,9 @@ Create an `archlens.json` file in your repository:
 When changes are detected:
 > **ArchLens** detected architectural changes in the following views:
 >
-> ![diff](diagram-url)
+> <img width="393" height="480" alt="Screenshot 2025-11-28 at 18 57 16" src="https://github.com/user-attachments/assets/c20f226b-7741-4a7b-b9ef-8ee6c25a574c" />
+
+
 
 When no changes are detected:
 > **ArchLens** - No architecturally relevant changes to the existing views
