@@ -7,9 +7,12 @@ inputs:
   render-diff:
     description: "Should it render diff"
     default: "true"
-  BRANCH_NAME: 
+  BRANCH_NAME:
     description: "name for the new orphan branch"
     required: true
+  comment-on-no-changes:
+    description: "Post a comment when there are no architectural changes"
+    default: "true"
 
 runs:
   using: 'composite'
@@ -140,7 +143,7 @@ runs:
           ${{ steps.run_archlens.outputs.MARKDOWN }}
 
     - uses: mshick/add-pr-comment@v2
-      if: steps.run_archlens.outputs.HAS_CHANGES == 'false'
+      if: steps.run_archlens.outputs.HAS_CHANGES == 'false' && inputs.comment-on-no-changes == 'true'
       with:
         message: |
           **ArchLens** - No architecturally relevant changes to the existing views
